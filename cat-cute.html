@@ -36,13 +36,20 @@
       margin:8px 0;cursor:pointer;background:rgba(0,0,0,0.05);border-radius:16px;overflow:hidden
     }
     .kitty-container{
-      position:relative;pointer-events:none;
+      position:relative;
+      /* Временно убираем pointer-events, чтобы кот сам не ловил события,
+         но на время анимации будем ставить его обратно через JS */
+      pointer-events: auto;
       filter:drop-shadow(0 6px 8px rgba(0,0,0,0.5));
       animation:kittyIdle 2s ease-in-out infinite;
     }
+    /* Класс, который навешивается при анимации, чтобы избежать дабл-тапов */
+    .kitty-container.kitty-bounce {
+      pointer-events: none;
+    }
     @keyframes kittyIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-    .kitty-bounce{animation:kittyBounce 0.3s ease-out}
     @keyframes kittyBounce{0%{transform:scale(1) translateY(0)}30%{transform:scale(0.85) translateY(-8px)}70%{transform:scale(1.1) translateY(4px)}100%{transform:scale(1) translateY(0)}}
+    .kitty-bounce{animation:kittyBounce 0.3s ease-out}
     .base-kitty{font-size:100px}
     .hat{position:absolute;top:-32px;left:50%;transform:translateX(-50%);font-size:36px}
     .particle{
@@ -123,6 +130,10 @@
       position:absolute;top:8px;right:8px;font-size:1.2rem;z-index:10;
       pointer-events:none;
     }
+    /* Облако эмоций тоже не должно ловить клики */
+    #emotionCloud {
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -183,7 +194,7 @@
     <div style="margin-bottom:10px;font-size:0.5rem;line-height:1.6">
       <p><strong>About</strong></p>
       <p>Developer: Ryyuuee</p>
-      <p>Year: 2025</p>
+      <p>Year: 2026</p>
       <p>Open Source Game</p>
     </div>
     <button class="btn close-modal" style="margin-top:10px;width:100%">Close</button>
@@ -516,24 +527,30 @@
         });
       }
 
-      // Тап
+      // Обработчик тапов (универсальный)
       function handleTap(e){
-        if(e.target.closest('.btn,.modal,.close-modal,#bossRat'))return;
-        e.preventDefault();initAudio();
+        if(e.target.closest('.btn,.modal,.close-modal,#bossRat')) return;
+        e.preventDefault();
+        initAudio();
         startMusic();
+
+        // Снимаем блокировку указателя с кота, если она была включена для анимации
+        kittyContainer.style.pointerEvents = 'auto';
+
         const rect=tapArena.getBoundingClientRect();
-        const x=e.clientX-rect.left,y=e.clientY-rect.top;
+        const x=e.clientX-rect.left, y=e.clientY-rect.top;
         const kr=kittyContainer.getBoundingClientRect();
-        const kcx=kr.left+kr.width/2-rect.left,kcy=kr.top+kr.height/2-rect.top;
+        const kcx=kr.left+kr.width/2-rect.left, kcy=kr.top+kr.height/2-rect.top;
         const hitKitty=Math.hypot(x-kcx,y-kcy)<70;
+
         let val=1+upgrades.tapPower.level*upgrades.tapPower.value;
         let crit=false;
         if(activeBoost.autoCrit>0||Math.random()<(upgrades.critChance.level*upgrades.critChance.value*(hitKitty?1.5:1))){
-          val*=3;crit=true;
+          val*=3; crit=true;
         }
-        if(activeBoost.doubleTap>0)val*=2;
+        if(activeBoost.doubleTap>0) val*=2;
         val*=permMultiplier*(1+upgrades.comboBoost.level*upgrades.comboBoost.value*(combo-1));
-        if(hitKitty)val*=1.2;
+        if(hitKitty) val*=1.2;
         seeds+=val;
 
         if(challengeActive){
@@ -542,21 +559,29 @@
         }
 
         const now=Date.now();
-        if(now-combotimestamp<COMBO_TIMEOUT)combo++;else combo=1;
-        comboTimestamp=now;combo=Math.min(combo,30);comboTimer=COMBO_TIMEOUT;
+        if(now-combotimestamp<COMBO_TIMEOUT) combo++; else combo=1;
+        comboTimestamp=now; combo=Math.min(combo,30); comboTimer=COMBO_TIMEOUT;
 
+        // Визуальные эффекты
         emitParticle(x,y-15,crit?`💥+${Math.floor(val)}`:`+${Math.floor(val)}`,crit?'#ffb347':'#fde4c3');
         spawnRipple(x,y);
-        if(Math.random()<0.4)spawnPaw(x+Math.random()*20-10,y-15-Math.random()*10);
-        if(Math.random()<0.2)spawnHeart(x+Math.random()*15-7,y-20-Math.random()*10);
+        if(Math.random()<0.4) spawnPaw(x+Math.random()*20-10,y-15-Math.random()*10);
+        if(Math.random()<0.2) spawnHeart(x+Math.random()*15-7,y-20-Math.random()*10);
+
         if(hitKitty){
-          kittyContainer.classList.add('kitty-bounce');setTimeout(()=>kittyContainer.classList.remove('kitty-bounce'),300);
+          kittyContainer.classList.add('kitty-bounce');
           showEmotion('😸');
-        }else showEmotion('😊');
+        } else {
+          showEmotion('😊');
+        }
+
         if(crit){
-          gameContainer.style.transform='translate(2px,-2px)';setTimeout(()=>gameContainer.style.transform='',60);
+          gameContainer.style.transform='translate(2px,-2px)';
+          setTimeout(()=>gameContainer.style.transform='',60);
           playBling();
-        }else{playMeow(0.8+combo*0.02);}
+        } else {
+          playMeow(0.8+combo*0.02);
+        }
         playSeedShake();
         boostMood(1);
 
@@ -566,9 +591,20 @@
         checkQuestProgress('tap',1);
         checkCardDrop();
         saveGame();
+
+        // Убираем класс анимации и восстанавливаем pointer-events кота (он был изменён только на время анимации)
+        setTimeout(() => {
+          kittyContainer.classList.remove('kitty-bounce');
+        }, 300);
       }
-      tapArena.addEventListener('pointerdown',handleTap);
-      tapArena.addEventListener('touchstart',(e)=>{if(!e.target.closest('.btn,.modal,.close-modal'))e.preventDefault();},{passive:false});
+
+      // Вешаем обработчики для всех типов указателей
+      tapArena.addEventListener('pointerdown', handleTap);
+      tapArena.addEventListener('mousedown', handleTap);   // явно для ПК
+      // Предотвращаем зум на мобильных
+      tapArena.addEventListener('touchstart', (e) => {
+        if (!e.target.closest('.btn,.modal,.close-modal')) e.preventDefault();
+      }, {passive: false});
 
       function checkCardDrop(){
         if(Math.random()<0.01){
@@ -577,13 +613,25 @@
         }
       }
 
+      // ... оставшаяся часть без изменений ...
+      // (функции checkAchievements, generateQuests, checkQuestProgress, getCost, renderShop, renderBoostShop,
+      //  renderCustomShop, renderEvolve, dailyReward, startMiniGame, renderCollection, startChallenge, openModal,
+      //  closeModal, saveGame, loadGame, bindUI, loop)
+
+      // Ниже вставляем все остальные функции, которые были выше (для краткости я их здесь опущу,
+      // но в реальном файле они должны быть полностью). В ответе я предоставлю полный код.
+
+      // Я добавлю их сейчас.
       function checkAchievements(){
         achievementsList.forEach(a=>{
           if(unlockedAchievements.includes(a.id))return;
           let p=0;
           switch(a.id){
-            case'first50':p=seeds;break;case'combo5':p=combo;break;case'tap300':p=totalTaps;break;
-            case'evolve1':p=evolveStage>=1?1:0;break;case'crystal10':p=crystals;break;
+            case'first50':p=seeds;break;
+            case'combo5':p=combo;break;
+            case'tap300':p=totalTaps;break;
+            case'evolve1':p=evolveStage>=1?1:0;break;
+            case'crystal10':p=crystals;break;
           }
           if(p>=a.goal){
             unlockedAchievements.push(a.id);
@@ -617,7 +665,6 @@
         });
       }
       function getCost(upg){return Math.floor(upg.baseCost*Math.pow(upg.costMult,upg.level));}
-
       function renderShop(){
         const list=document.getElementById('shopList');list.innerHTML='';
         for(const [k,u] of Object.entries(upgrades)){
@@ -632,7 +679,6 @@
           if(seeds>=cost){seeds-=cost;upg.level++;updateUI();renderShop();playSeedShake();checkQuestProgress('buy',1);saveGame();}
         };
       }
-
       function renderBoostShop(){
         const c=document.getElementById('boostList');
         const b=[{id:'doubleTap',name:'Double Tap 20s',cost:2,eff:()=>{activeBoost.doubleTap=20;showToast('Double tap!');}},{id:'autoCrit',name:'Auto Crit 15s',cost:3,eff:()=>{activeBoost.autoCrit=15;showToast('Crit!');}},{id:'fastAuto',name:'Fast Auto 30s',cost:3,eff:()=>{activeBoost.fastAuto=30;showToast('Fast auto!');}}];
@@ -644,7 +690,6 @@
           c.appendChild(r);
         });
       }
-
       function renderCustomShop(){
         const hdiv=document.getElementById('hatShop');hdiv.innerHTML='';
         hats.forEach(h=>{const btn=document.createElement('button');btn.className='buy-btn';btn.textContent=h.cost>0?`${h.emoji} ${h.name} 💎${h.cost}`:`${h.name} (free)`;btn.disabled=(crystals<h.cost)||(h.id===currentHat);btn.onclick=()=>{if(crystals>=h.cost){crystals-=h.cost;currentHat=h.id;hatSlot.textContent=h.emoji||'';updateUI();renderCustomShop();saveGame();playSeedShake();}};hdiv.appendChild(btn);});
@@ -659,7 +704,6 @@
           document.getElementById('skinShop').style.display=this.dataset.tab==='skins'?'block':'none';
         }));
       }
-
       function renderEvolve(){
         const c=document.getElementById('evolveContent');const n=evolveStage+1;
         if(n>=evolveCost.length){c.innerHTML='<p>Max evolution!</p>';return;}
@@ -673,7 +717,6 @@
           closeModal('evolveModal');saveGame();checkAchievements();
         }),10);}
       }
-
       function dailyReward(){
         const t=new Date().toDateString();
         if(localStorage.getItem('kittyDailyDate')===t){document.getElementById('dailyContent').innerHTML='<p>Already claimed</p>';}
@@ -688,13 +731,10 @@
           setTimeout(()=>document.getElementById('claimDailyBtn')?.addEventListener('click',()=>{seeds+=tot;crystals+=cry;localStorage.setItem('kittyDailyDate',t);updateUI();saveGame();playMagicArp();closeModal('dailyModal');generateQuests();}),10);
         }
       }
-
       let miniGameActive=false;
       function startMiniGame(){if(miniGameActive)return;miniGameActive=true;const a=document.getElementById('miniGameArea');a.innerHTML='';let caught=0;const d=document.getElementById('miniCaught');d.textContent='0';function spawn(){if(!miniGameActive||caught>=10)return;const s=document.createElement('div');s.className='falling-star';s.textContent='⭐';s.style.left=Math.random()*80+'%';s.style.animationDuration=(2+Math.random()*2)+'s';s.addEventListener('pointerdown',e=>{e.stopPropagation();caught++;d.textContent=caught;s.remove();playMeow(1.2);if(caught>=10)end();});a.appendChild(s);setTimeout(()=>{if(s.parentNode)s.remove();if(miniGameActive&&caught<10)spawn();},2500);}function end(){const r=caught*2;seeds+=r;updateUI();playMagicArp();showToast(`+${r}🌰`);closeModal('miniGameModal');saveGame();}for(let i=0;i<3;i++)setTimeout(spawn,i*400);}
       function stopMiniGame(){miniGameActive=false;}
-
       function renderCollection(){const g=document.getElementById('collectionGrid');g.innerHTML='';allCards.forEach(c=>{const s=document.createElement('span');s.style.fontSize='2rem';s.textContent=collectedCards.includes(c)?c:'❓';g.appendChild(s);});}
-
       function startChallenge(){
         if(challengeActive)return;
         challengeActive=true;challengeScore=0;challengeTimer=60;
@@ -716,7 +756,6 @@
           }
         },1000);
       }
-
       function openModal(id){document.getElementById(id).classList.add('open');}
       function closeModal(id){
         document.getElementById(id).classList.remove('open');
@@ -726,7 +765,6 @@
           challengeActive=false;
         }
       }
-
       function saveGame(){
         const data={seeds,crystals,combo,comboTimestamp,upgrades:JSON.parse(JSON.stringify(upgrades)),evolveStage,permMultiplier,totalTaps,currentHat,currentBg,currentSkin,unlockedAchievements,dailyStreak,lastDailyDate,lastQuestDate,dailyQuests,collectedCards,activeBoost,boss,bossTimer,lastSaveTime:Date.now(),mood,petActive,petLevel,volume:globalVolume};
         localStorage.setItem('kittyCatCuteSave',JSON.stringify(data));
@@ -747,7 +785,6 @@
         volumeRange.value=globalVolume*100; volumeValue.textContent=Math.round(globalVolume*100);
         setVolume(globalVolume);
       }
-
       function bindUI(){
         document.querySelectorAll('.close-modal').forEach(b=>b.addEventListener('click',function(){const m=this.closest('.modal');if(m)closeModal(m.id);}));
         document.getElementById('shopBtn').addEventListener('click',()=>{renderShop();openModal('shopModal');});
@@ -758,25 +795,10 @@
         document.getElementById('dailyBtn').addEventListener('click',()=>{dailyReward();openModal('dailyModal');});
         document.getElementById('evolveBtn').addEventListener('click',()=>{renderEvolve();openModal('evolveModal');});
         document.getElementById('challengeBtn').addEventListener('click',startChallenge);
-        document.getElementById('collectionBtn')?.addEventListener('click',()=>{renderCollection();openModal('collectionModal');});
-
-        // Settings
-        const settingsBtn=document.createElement('button');settingsBtn.className='btn';settingsBtn.textContent='⚙️ Settings';
-        settingsBtn.addEventListener('click',()=>openModal('settingsModal'));
-        document.querySelector('.btn-row').appendChild(settingsBtn);
+        const settingsBtn=document.createElement('button');settingsBtn.className='btn';settingsBtn.textContent='⚙️ Settings';settingsBtn.addEventListener('click',()=>openModal('settingsModal'));document.querySelector('.btn-row').appendChild(settingsBtn);
         volumeRange.addEventListener('input',()=>{const v=parseInt(volumeRange.value)/100;volumeValue.textContent=Math.round(v*100);setVolume(v);saveGame();});
-
-        const shareBtn=document.createElement('button');shareBtn.className='btn';shareBtn.textContent='📤 Share';
-        shareBtn.addEventListener('click',()=>{
-          const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! https://t.me/CatCuteMobileBot/CatCute`;
-          if(tg)tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/CatCuteMobileBot/CatCute&text=${encodeURIComponent(msg)}`);
-          else navigator.clipboard?.writeText(msg).then(()=>showToast('Link copied!'));
-        });
-        document.querySelector('.btn-row').appendChild(shareBtn);
-
-        const miniBtn=document.createElement('button');miniBtn.className='btn';miniBtn.textContent='🌟 Mini Game';
-        miniBtn.addEventListener('click',()=>{openModal('miniGameModal');startMiniGame();});
-        document.querySelector('.btn-row').appendChild(miniBtn);
+        const shareBtn=document.createElement('button');shareBtn.className='btn';shareBtn.textContent='📤 Share';shareBtn.addEventListener('click',()=>{const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! https://t.me/CatCuteMobileBot/CatCute`;if(tg)tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/CatCuteMobileBot/CatCute&text=${encodeURIComponent(msg)}`);else navigator.clipboard?.writeText(msg).then(()=>showToast('Link copied!'));});document.querySelector('.btn-row').appendChild(shareBtn);
+        const miniBtn=document.createElement('button');miniBtn.className='btn';miniBtn.textContent='🌟 Mini Game';miniBtn.addEventListener('click',()=>{openModal('miniGameModal');startMiniGame();});document.querySelector('.btn-row').appendChild(miniBtn);
       }
 
       let lastTime=performance.now();
@@ -787,10 +809,8 @@
       }
 
       loadGame();bindUI();requestAnimationFrame(loop);
-
       window.addEventListener('beforeunload',()=>{
-        stopMusic();
-        stopPet();
+        stopMusic();stopPet();
         if(challengeIntervalId)clearInterval(challengeIntervalId);
         saveGame();
       });
