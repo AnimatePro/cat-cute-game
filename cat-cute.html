@@ -15,7 +15,7 @@
     }
     #game-container{
       width:100%;max-width:420px;height:100%;display:flex;flex-direction:column;
-      padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom) 12px;
+      padding:env(safe-area-inset-top)12px env(safe-area-inset-bottom)12px;
       transition:transform 0.1s ease;
     }
     .top-panel{
@@ -57,7 +57,8 @@
     @keyframes ripple{to{transform:scale(4);opacity:0}}
     .boss-hp-bar{
       position:absolute;top:10px;left:50%;transform:translateX(-50%);width:80%;height:12px;
-      background:#634b30;border:2px solid #3e2b1c;border-radius:6px;overflow:hidden;z-index:20
+      background:#634b30;border:2px solid #3e2b1c;border-radius:6px;overflow:hidden;z-index:20;
+      pointer-events:none;
     }
     .boss-hp-fill{height:100%;background:#ff4444;transition:width 0.1s}
     .btn-row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:6px 0 12px}
@@ -119,7 +120,8 @@
       position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5
     }
     .mood-indicator{
-      position:absolute;top:8px;right:8px;font-size:1.2rem;z-index:10
+      position:absolute;top:8px;right:8px;font-size:1.2rem;z-index:10;
+      pointer-events:none;
     }
   </style>
 </head>
@@ -172,6 +174,20 @@
   <div class="modal" id="challengeModal"><div class="modal-content"><h3>⚔️ Challenge (60s)</h3><p>Tap as much as you can!</p><div id="challengeTimer">60</div><div id="challengeScore">0</div><button class="btn close-modal" style="margin-top:10px;width:100%">Exit</button></div></div>
   <div class="modal" id="miniGameModal"><div class="modal-content"><h3>🌟 Catch the Star!</h3><div class="mini-game-area" id="miniGameArea"></div><p>Caught: <span id="miniCaught">0</span>/10</p><button class="btn close-modal" style="margin-top:10px;width:100%">Exit</button></div></div>
   <div class="modal" id="collectionModal"><div class="modal-content"><h3>🃏 Cat Cards</h3><div id="collectionGrid"></div><button class="btn close-modal" style="margin-top:10px;width:100%">Close</button></div></div>
+  <div class="modal" id="settingsModal"><div class="modal-content">
+    <h3>⚙️ Settings</h3>
+    <div style="margin-bottom:10px">
+      <label for="volumeRange">Volume: <span id="volumeValue">100</span>%</label>
+      <input type="range" id="volumeRange" min="0" max="100" value="100" style="width:100%">
+    </div>
+    <div style="margin-bottom:10px;font-size:0.5rem;line-height:1.6">
+      <p><strong>About</strong></p>
+      <p>Developer: Ryyuuee</p>
+      <p>Year: 2025</p>
+      <p>Open Source Game</p>
+    </div>
+    <button class="btn close-modal" style="margin-top:10px;width:100%">Close</button>
+  </div></div>
   <div id="toast-container"></div>
 
   <script>
@@ -194,6 +210,7 @@
 
       let evolveStage=0;
       const evolveNames=['🐱 Kitten','⚔️ Cat Warrior','🔮 Cat Mage','🌟 Legendary Cat'];
+      const evolveEmojis=['🐱','😼','😺','😻'];
       const evolveCost=[0,500,3000,15000];
       let permMultiplier=1;
 
@@ -236,26 +253,25 @@
       let bossTimer=BOSS_COOLDOWN;
       let lastSaveTime=Date.now();
 
-      // Настроение
       let mood=100, maxMood=100;
       const moodDecay=0.5;
       let moodBoostActive=false;
 
-      // Питомец
       let petActive=false, petLevel=0;
       const petEmojis=['🐭','🐹','🐰','🦊'];
       let petIntervalId=null;
 
-      // Испытание
       let challengeActive=false, challengeTimer=60, challengeScore=0, challengeIntervalId=null;
 
-      // Сезоны и музыка
       let currentSeason='spring';
       const seasonEmojis={spring:'🌸',summer:'☀️',autumn:'🍂',winter:'❄️'};
       let musicInterval=null;
 
       let dailyStreak=0, lastDailyDate=null;
       let dailyQuests=[], lastQuestDate=null;
+
+      let globalVolume=1.0;
+      let masterGainNode=null;
 
       // ---- DOM ----
       const seedsDisplay=document.getElementById('seedsDisplay');
@@ -271,15 +287,90 @@
       const moodIcon=document.getElementById('moodIcon');
       const petComp=document.getElementById('petComp');
       const seasonLayer=document.getElementById('seasonLayer');
+      const volumeRange=document.getElementById('volumeRange');
+      const volumeValue=document.getElementById('volumeValue');
 
-      // Аудио контекст
+      // Аудио
       let audioCtx=null;
-      function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();}
-      function playMeow(p=1){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(400*p,audioCtx.currentTime);o.frequency.linearRampToValueAtTime(600*p,audioCtx.currentTime+0.08);o.frequency.setValueAtTime(500*p,audioCtx.currentTime+0.12);g.gain.setValueAtTime(0.1,audioCtx.currentTime);g.gain.linearRampToValueAtTime(0.15,audioCtx.currentTime+0.05);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+0.2);}
-      function playSeedShake(){if(!audioCtx)return;const n=audioCtx.createBufferSource();const b=audioCtx.createBuffer(1,2048,audioCtx.sampleRate);const d=b.getChannelData(0);for(let i=0;i<2048;i++)d[i]=Math.random()*2-1;n.buffer=b;const bp=audioCtx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=3000;bp.Q.value=0.8;const g=audioCtx.createGain();g.gain.setValueAtTime(0.08,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.05);n.connect(bp).connect(g).connect(audioCtx.destination);n.start();n.stop(audioCtx.currentTime+0.05);}
-      function playBling(){if(!audioCtx)return;[800,1200].forEach(f=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0.1,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+0.2);});}
-      function playMagicArp(){if(!audioCtx)return;const n=[523.25,659.25,783.99,1046.5];n.forEach((f,i)=>{const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(0,audioCtx.currentTime+i*0.08);g.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+i*0.08+0.04);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+i*0.08+0.15);o.connect(g).connect(audioCtx.destination);o.start(audioCtx.currentTime+i*0.08);o.stop(audioCtx.currentTime+i*0.08+0.15);});}
-      function startMusic(){if(musicInterval)return;const notes=[262,294,330,349,392,440,494,523];let idx=0;musicInterval=setInterval(()=>{if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='triangle';o.frequency.value=notes[idx%notes.length];g.gain.setValueAtTime(0.02,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);o.connect(g).connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+0.2);idx++;},600);}
+      function initAudio(){
+        if(!audioCtx){
+          audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+          masterGainNode=audioCtx.createGain();
+          masterGainNode.gain.value=globalVolume;
+          masterGainNode.connect(audioCtx.destination);
+        }
+        if(audioCtx.state==='suspended') audioCtx.resume();
+      }
+      function setVolume(val){
+        globalVolume=val;
+        if(masterGainNode) masterGainNode.gain.value=val;
+      }
+
+      function playMeow(p=1){
+        if(!audioCtx||!masterGainNode) return;
+        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+        o.type='sine';o.frequency.setValueAtTime(400*p,audioCtx.currentTime);
+        o.frequency.linearRampToValueAtTime(600*p,audioCtx.currentTime+0.08);
+        o.frequency.setValueAtTime(500*p,audioCtx.currentTime+0.12);
+        g.gain.setValueAtTime(0.1,audioCtx.currentTime);
+        g.gain.linearRampToValueAtTime(0.15,audioCtx.currentTime+0.05);
+        g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
+        o.connect(g).connect(masterGainNode);
+        o.start();o.stop(audioCtx.currentTime+0.2);
+      }
+      function playSeedShake(){
+        if(!audioCtx||!masterGainNode) return;
+        const n=audioCtx.createBufferSource();
+        const b=audioCtx.createBuffer(1,2048,audioCtx.sampleRate);
+        const d=b.getChannelData(0);
+        for(let i=0;i<2048;i++) d[i]=Math.random()*2-1;
+        n.buffer=b;
+        const bp=audioCtx.createBiquadFilter();
+        bp.type='bandpass';bp.frequency.value=3000;bp.Q.value=0.8;
+        const g=audioCtx.createGain();
+        g.gain.setValueAtTime(0.08,audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.05);
+        n.connect(bp).connect(g).connect(masterGainNode);
+        n.start();n.stop(audioCtx.currentTime+0.05);
+      }
+      function playBling(){
+        if(!audioCtx||!masterGainNode) return;
+        [800,1200].forEach(f=>{
+          const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+          o.type='sine';o.frequency.value=f;
+          g.gain.setValueAtTime(0.1,audioCtx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
+          o.connect(g).connect(masterGainNode);
+          o.start();o.stop(audioCtx.currentTime+0.2);
+        });
+      }
+      function playMagicArp(){
+        if(!audioCtx||!masterGainNode) return;
+        const n=[523.25,659.25,783.99,1046.5];
+        n.forEach((f,i)=>{
+          const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+          o.type='triangle';o.frequency.value=f;
+          g.gain.setValueAtTime(0,audioCtx.currentTime+i*0.08);
+          g.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+i*0.08+0.04);
+          g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+i*0.08+0.15);
+          o.connect(g).connect(masterGainNode);
+          o.start(audioCtx.currentTime+i*0.08);o.stop(audioCtx.currentTime+i*0.08+0.15);
+        });
+      }
+      function startMusic(){
+        if(!audioCtx||!masterGainNode||musicInterval) return;
+        const notes=[262,294,330,349,392,440,494,523];
+        let idx=0;
+        musicInterval=setInterval(()=>{
+          const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+          o.type='triangle';o.frequency.value=notes[idx%notes.length];
+          g.gain.setValueAtTime(0.02,audioCtx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
+          o.connect(g).connect(masterGainNode);
+          o.start();o.stop(audioCtx.currentTime+0.2);
+          idx++;
+        },600);
+      }
       function stopMusic(){if(musicInterval){clearInterval(musicInterval);musicInterval=null;}}
 
       // Toast
@@ -302,7 +393,7 @@
 
       // Настроение
       function updateMood(dt){
-        mood=Math.max(0,Math.min(maxMood, mood - moodDecay*dt));
+        mood=Math.max(0,Math.min(maxMood, mood-moodDecay*dt));
         moodIcon.textContent=mood>60?'😺':mood>30?'😿':'😾';
         if(mood>=80&&!moodBoostActive){
           moodBoostActive=true;
@@ -336,7 +427,17 @@
         setTimeout(()=>emotionCloud.style.opacity='0',1500);
       }
 
-      // Питомец (вызов при загрузке и активации)
+      // Отображение кота (скин или эволюция)
+      function updateKittyAppearance(){
+        const baseKitty=document.getElementById('baseKitty');
+        if(currentSkin!=='default' && skins.find(s=>s.id===currentSkin)){
+          baseKitty.textContent=skins.find(s=>s.id===currentSkin).emoji;
+        }else{
+          baseKitty.textContent=evolveEmojis[evolveStage]||'🐱';
+        }
+      }
+
+      // Питомец
       function startPet(){
         if(petIntervalId) return;
         petComp.style.display='block';
@@ -349,11 +450,10 @@
         },30000);
       }
       function activatePet(){
-        if(petActive)return;
-        petActive=true;petLevel=1;
+        if(petActive) return;
+        petActive=true; petLevel=1;
         startPet();
       }
-
       function stopPet(){
         if(petIntervalId){ clearInterval(petIntervalId); petIntervalId=null; }
         petComp.style.display='none';
@@ -371,7 +471,7 @@
       function updateAuto(dt){
         if(upgrades.autoTapper.level>0){
           let r=upgrades.autoTapper.level*upgrades.autoTapper.value*permMultiplier;
-          if(activeBoost.fastAuto>0)r*=2;
+          if(activeBoost.fastAuto>0) r*=2;
           autoAcc+=r*dt;
           if(autoAcc>=1){const a=Math.floor(autoAcc);seeds+=a;autoAcc-=a;updateUI();if(Math.random()<0.2){const rect=kittyContainer.getBoundingClientRect();const ar=tapArena.getBoundingClientRect();spawnPaw(rect.left+rect.width/2-ar.left+Math.random()*30-15,rect.top+rect.height/2-ar.top-30-Math.random()*20);}}
         }
@@ -473,11 +573,7 @@
       function checkCardDrop(){
         if(Math.random()<0.01){
           const nc=allCards[Math.floor(Math.random()*allCards.length)];
-          if(!collectedCards.includes(nc)){
-            collectedCards.push(nc);
-            showToast(`🃏 New card: ${nc}!`);
-            saveGame();
-          }
+          if(!collectedCards.includes(nc)){collectedCards.push(nc);showToast(`🃏 New card: ${nc}!`);saveGame();}
         }
       }
 
@@ -486,11 +582,8 @@
           if(unlockedAchievements.includes(a.id))return;
           let p=0;
           switch(a.id){
-            case'first50':p=seeds;break;
-            case'combo5':p=combo;break;
-            case'tap300':p=totalTaps;break;
-            case'evolve1':p=evolveStage>=1?1:0;break;
-            case'crystal10':p=crystals;break;
+            case'first50':p=seeds;break;case'combo5':p=combo;break;case'tap300':p=totalTaps;break;
+            case'evolve1':p=evolveStage>=1?1:0;break;case'crystal10':p=crystals;break;
           }
           if(p>=a.goal){
             unlockedAchievements.push(a.id);
@@ -558,7 +651,7 @@
         const bdiv=document.getElementById('bgShop');bdiv.innerHTML='';
         backgrounds.forEach(b=>{const btn=document.createElement('button');btn.className='buy-btn';btn.textContent=b.cost>0?`${b.name} 💎${b.cost}`:`${b.name} (free)`;btn.disabled=(crystals<b.cost)||(b.id===currentBg);btn.onclick=()=>{if(crystals>=b.cost){crystals-=b.cost;currentBg=b.id;document.body.style.background=b.color;updateUI();renderCustomShop();saveGame();playSeedShake();}};bdiv.appendChild(btn);});
         const sdiv=document.getElementById('skinShop');sdiv.innerHTML='';
-        skins.forEach(s=>{const btn=document.createElement('button');btn.className='buy-btn';btn.textContent=s.cost>0?`${s.emoji} ${s.name} 💎${s.cost}`:`${s.name} (free)`;btn.disabled=(crystals<s.cost)||(s.id===currentSkin);btn.onclick=()=>{if(crystals>=s.cost){crystals-=s.cost;currentSkin=s.id;document.getElementById('baseKitty').textContent=s.emoji;updateUI();renderCustomShop();saveGame();playSeedShake();}};sdiv.appendChild(btn);});
+        skins.forEach(s=>{const btn=document.createElement('button');btn.className='buy-btn';btn.textContent=s.cost>0?`${s.emoji} ${s.name} 💎${s.cost}`:`${s.name} (free)`;btn.disabled=(crystals<s.cost)||(s.id===currentSkin);btn.onclick=()=>{if(crystals>=s.cost){crystals-=s.cost;currentSkin=s.id;updateKittyAppearance();updateUI();renderCustomShop();saveGame();playSeedShake();}};sdiv.appendChild(btn);});
         document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',function(){
           document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));this.classList.add('active');
           document.getElementById('hatShop').style.display=this.dataset.tab==='hats'?'block':'none';
@@ -572,7 +665,13 @@
         if(n>=evolveCost.length){c.innerHTML='<p>Max evolution!</p>';return;}
         const need=evolveCost[n];
         c.innerHTML=`<p>${evolveNames[evolveStage]} → ${evolveNames[n]}</p><p>Need 🌰${need}</p>${seeds>=need?'<button class="btn" id="evolveNow">Evolve!</button>':'<p>Not enough</p>'}`;
-        if(seeds>=need){setTimeout(()=>document.getElementById('evolveNow')?.addEventListener('click',()=>{seeds=0;combo=1;comboTimer=0;Object.values(upgrades).forEach(u=>u.level=0);autoAcc=0;totalTaps=0;evolveStage++;permMultiplier*=1.6;crystals+=2+evolveStage;document.getElementById('baseKitty').textContent=evolveNames[evolveStage].split(' ')[0];updateUI();playMagicArp();showToast('Evolved!');closeModal('evolveModal');saveGame();checkAchievements();}),10);}
+        if(seeds>=need){setTimeout(()=>document.getElementById('evolveNow')?.addEventListener('click',()=>{
+          seeds=0;combo=1;comboTimer=0;Object.values(upgrades).forEach(u=>u.level=0);autoAcc=0;totalTaps=0;
+          evolveStage++;permMultiplier*=1.6;crystals+=2+evolveStage;
+          updateKittyAppearance();
+          updateUI();playMagicArp();showToast('Evolved!');
+          closeModal('evolveModal');saveGame();checkAchievements();
+        }),10);}
       }
 
       function dailyReward(){
@@ -591,27 +690,10 @@
       }
 
       let miniGameActive=false;
-      function startMiniGame(){
-        if(miniGameActive)return;miniGameActive=true;
-        const a=document.getElementById('miniGameArea');a.innerHTML='';let caught=0;
-        const d=document.getElementById('miniCaught');d.textContent='0';
-        function spawn(){
-          if(!miniGameActive||caught>=10)return;
-          const s=document.createElement('div');s.className='falling-star';s.textContent='⭐';
-          s.style.left=Math.random()*80+'%';s.style.animationDuration=(2+Math.random()*2)+'s';
-          s.addEventListener('pointerdown',e=>{e.stopPropagation();caught++;d.textContent=caught;s.remove();playMeow(1.2);if(caught>=10)end();});
-          a.appendChild(s);
-          setTimeout(()=>{if(s.parentNode)s.remove();if(miniGameActive&&caught<10)spawn();},2500);
-        }
-        function end(){const r=caught*2;seeds+=r;updateUI();playMagicArp();showToast(`+${r}🌰`);closeModal('miniGameModal');saveGame();}
-        for(let i=0;i<3;i++)setTimeout(spawn,i*400);
-      }
+      function startMiniGame(){if(miniGameActive)return;miniGameActive=true;const a=document.getElementById('miniGameArea');a.innerHTML='';let caught=0;const d=document.getElementById('miniCaught');d.textContent='0';function spawn(){if(!miniGameActive||caught>=10)return;const s=document.createElement('div');s.className='falling-star';s.textContent='⭐';s.style.left=Math.random()*80+'%';s.style.animationDuration=(2+Math.random()*2)+'s';s.addEventListener('pointerdown',e=>{e.stopPropagation();caught++;d.textContent=caught;s.remove();playMeow(1.2);if(caught>=10)end();});a.appendChild(s);setTimeout(()=>{if(s.parentNode)s.remove();if(miniGameActive&&caught<10)spawn();},2500);}function end(){const r=caught*2;seeds+=r;updateUI();playMagicArp();showToast(`+${r}🌰`);closeModal('miniGameModal');saveGame();}for(let i=0;i<3;i++)setTimeout(spawn,i*400);}
       function stopMiniGame(){miniGameActive=false;}
 
-      function renderCollection(){
-        const g=document.getElementById('collectionGrid');g.innerHTML='';
-        allCards.forEach(c=>{const s=document.createElement('span');s.style.fontSize='2rem';s.textContent=collectedCards.includes(c)?c:'❓';g.appendChild(s);});
-      }
+      function renderCollection(){const g=document.getElementById('collectionGrid');g.innerHTML='';allCards.forEach(c=>{const s=document.createElement('span');s.style.fontSize='2rem';s.textContent=collectedCards.includes(c)?c:'❓';g.appendChild(s);});}
 
       function startChallenge(){
         if(challengeActive)return;
@@ -624,8 +706,7 @@
           challengeTimer--;
           document.getElementById('challengeTimer').textContent=challengeTimer;
           if(challengeTimer<=0){
-            clearInterval(challengeIntervalId);
-            challengeIntervalId=null;
+            clearInterval(challengeIntervalId);challengeIntervalId=null;
             challengeActive=false;
             const reward=challengeScore;
             seeds+=reward;updateUI();
@@ -647,46 +728,24 @@
       }
 
       function saveGame(){
-        const data={seeds,crystals,combo,comboTimestamp,upgrades:JSON.parse(JSON.stringify(upgrades)),evolveStage,permMultiplier,totalTaps,currentHat,currentBg,currentSkin,unlockedAchievements,dailyStreak,lastDailyDate,lastQuestDate,dailyQuests,collectedCards,activeBoost,boss,bossTimer,lastSaveTime:Date.now(),mood,petActive,petLevel};
+        const data={seeds,crystals,combo,comboTimestamp,upgrades:JSON.parse(JSON.stringify(upgrades)),evolveStage,permMultiplier,totalTaps,currentHat,currentBg,currentSkin,unlockedAchievements,dailyStreak,lastDailyDate,lastQuestDate,dailyQuests,collectedCards,activeBoost,boss,bossTimer,lastSaveTime:Date.now(),mood,petActive,petLevel,volume:globalVolume};
         localStorage.setItem('kittyCatCuteSave',JSON.stringify(data));
         if(tg?.CloudStorage)tg.CloudStorage.setItem('kittyCatCuteSave',JSON.stringify(data));
       }
       function loadGame(){
         const raw=localStorage.getItem('kittyCatCuteSave');
-        if(raw){
-          try{
-            const d=JSON.parse(raw);
-            seeds=d.seeds||0;crystals=d.crystals||0;combo=d.combo||1;comboTimestamp=d.combotimestamp||0;
-            if(d.upgrades)Object.assign(upgrades,d.upgrades);
-            evolveStage=d.evolveStage||0;permMultiplier=d.permMultiplier||1;totalTaps=d.totalTaps||0;
-            currentHat=d.currentHat||null;currentBg=d.currentBg||null;currentSkin=d.currentSkin||'default';
-            unlockedAchievements=d.unlockedAchievements||[];
-            dailyStreak=d.dailyStreak||0;lastDailyDate=d.lastDailyDate||null;
-            lastQuestDate=d.lastQuestDate||null;if(d.dailyQuests)dailyQuests=d.dailyQuests;
-            collectedCards=d.collectedCards||[];
-            if(d.activeBoost)activeBoost=d.activeBoost;
-            boss=d.boss||null;bossTimer=d.bossTimer||BOSS_COOLDOWN;
-            lastSaveTime=d.lastSaveTime||Date.now();
-            mood=d.mood!==undefined?d.mood:100;
-            petActive=d.petActive||false;petLevel=d.petLevel||0;
-
-            if(combo>1){const e=Date.now()-comboTimestamp;if(e<COMBO_TIMEOUT)comboTimer=COMBO_TIMEOUT-e;else{combo=1;comboTimer=0;}}
-            hatSlot.textContent=hats.find(h=>h.id===currentHat)?.emoji||'';
-            const bg=backgrounds.find(b=>b.id===currentBg);
-            if(bg)document.body.style.background=bg.color;
-            const sk=skins.find(s=>s.id===currentSkin);
-            if(sk)document.getElementById('baseKitty').textContent=sk.emoji;
-            updateUI();
-            if(petActive) startPet();
-            if(lastSaveTime){
-              const off=(Date.now()-lastSaveTime)/1000;
-              const earn=upgrades.autoTapper.level*upgrades.autoTapper.value*permMultiplier*off*0.5;
-              if(earn>0){seeds+=earn;showToast(`+${Math.floor(earn)}🌰 while away`,3000);updateUI();}
-            }
-          }catch(e){}
-        }
+        if(raw){try{const d=JSON.parse(raw);seeds=d.seeds||0;crystals=d.crystals||0;combo=d.combo||1;comboTimestamp=d.combotimestamp||0;if(d.upgrades)Object.assign(upgrades,d.upgrades);evolveStage=d.evolveStage||0;permMultiplier=d.permMultiplier||1;totalTaps=d.totalTaps||0;currentHat=d.currentHat||null;currentBg=d.currentBg||null;currentSkin=d.currentSkin||'default';unlockedAchievements=d.unlockedAchievements||[];dailyStreak=d.dailyStreak||0;lastDailyDate=d.lastDailyDate||null;lastQuestDate=d.lastQuestDate||null;if(d.dailyQuests)dailyQuests=d.dailyQuests;collectedCards=d.collectedCards||[];if(d.activeBoost)activeBoost=d.activeBoost;boss=d.boss||null;bossTimer=d.bossTimer||BOSS_COOLDOWN;lastSaveTime=d.lastSaveTime||Date.now();mood=d.mood!==undefined?d.mood:100;petActive=d.petActive||false;petLevel=d.petLevel||0;globalVolume=d.volume!==undefined?d.volume:1.0;
+        if(combo>1){const e=Date.now()-comboTimestamp;if(e<COMBO_TIMEOUT)comboTimer=COMBO_TIMEOUT-e;else{combo=1;comboTimer=0;}}
+        hatSlot.textContent=hats.find(h=>h.id===currentHat)?.emoji||'';
+        const bg=backgrounds.find(b=>b.id===currentBg);if(bg)document.body.style.background=bg.color;
+        updateKittyAppearance();
+        if(petActive) startPet();
+        if(lastSaveTime){const off=(Date.now()-lastSaveTime)/1000;const earn=upgrades.autoTapper.level*upgrades.autoTapper.value*permMultiplier*off*0.5;if(earn>0){seeds+=earn;showToast(`+${Math.floor(earn)}🌰 while away`,3000);updateUI();}}
+        }catch(e){}}
         generateQuests();updateSeason();
-        if(boss) setTimeout(spawnBoss,100); // восстановить босса
+        if(boss) setTimeout(spawnBoss,100);
+        volumeRange.value=globalVolume*100; volumeValue.textContent=Math.round(globalVolume*100);
+        setVolume(globalVolume);
       }
 
       function bindUI(){
@@ -694,20 +753,18 @@
         document.getElementById('shopBtn').addEventListener('click',()=>{renderShop();openModal('shopModal');});
         document.getElementById('boostBtn').addEventListener('click',()=>{renderBoostShop();openModal('boostModal');});
         document.getElementById('customBtn').addEventListener('click',()=>{renderCustomShop();openModal('customModal');});
-        document.getElementById('questsBtn').addEventListener('click',()=>{
-          const ql=document.getElementById('questList');ql.innerHTML='';
-          dailyQuests.forEach(q=>{const d=document.createElement('div');d.className='quest-row';d.textContent=`${q.desc} [${Math.min(q.progress,q.goal)}/${q.goal}] ${q.progress>=q.goal?'✅':''}`;ql.appendChild(d);});
-          openModal('questsModal');
-        });
-        document.getElementById('achievementsBtn').addEventListener('click',()=>{
-          const al=document.getElementById('achList');al.innerHTML='';
-          achievementsList.forEach(a=>{const done=unlockedAchievements.includes(a.id);const d=document.createElement('div');d.className='ach-row';d.innerHTML=`${done?'✅':'🔒'} ${a.name}`;al.appendChild(d);});
-          openModal('achievementsModal');
-        });
+        document.getElementById('questsBtn').addEventListener('click',()=>{const ql=document.getElementById('questList');ql.innerHTML='';dailyQuests.forEach(q=>{const d=document.createElement('div');d.className='quest-row';d.textContent=`${q.desc} [${Math.min(q.progress,q.goal)}/${q.goal}] ${q.progress>=q.goal?'✅':''}`;ql.appendChild(d);});openModal('questsModal');});
+        document.getElementById('achievementsBtn').addEventListener('click',()=>{const al=document.getElementById('achList');al.innerHTML='';achievementsList.forEach(a=>{const done=unlockedAchievements.includes(a.id);const d=document.createElement('div');d.className='ach-row';d.innerHTML=`${done?'✅':'🔒'} ${a.name}`;al.appendChild(d);});openModal('achievementsModal');});
         document.getElementById('dailyBtn').addEventListener('click',()=>{dailyReward();openModal('dailyModal');});
         document.getElementById('evolveBtn').addEventListener('click',()=>{renderEvolve();openModal('evolveModal');});
         document.getElementById('challengeBtn').addEventListener('click',startChallenge);
         document.getElementById('collectionBtn')?.addEventListener('click',()=>{renderCollection();openModal('collectionModal');});
+
+        // Settings
+        const settingsBtn=document.createElement('button');settingsBtn.className='btn';settingsBtn.textContent='⚙️ Settings';
+        settingsBtn.addEventListener('click',()=>openModal('settingsModal'));
+        document.querySelector('.btn-row').appendChild(settingsBtn);
+        volumeRange.addEventListener('input',()=>{const v=parseInt(volumeRange.value)/100;volumeValue.textContent=Math.round(v*100);setVolume(v);saveGame();});
 
         const shareBtn=document.createElement('button');shareBtn.className='btn';shareBtn.textContent='📤 Share';
         shareBtn.addEventListener('click',()=>{
@@ -734,7 +791,7 @@
       window.addEventListener('beforeunload',()=>{
         stopMusic();
         stopPet();
-        if(challengeIntervalId) clearInterval(challengeIntervalId);
+        if(challengeIntervalId)clearInterval(challengeIntervalId);
         saveGame();
       });
     })();
