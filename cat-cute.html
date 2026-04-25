@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Cat Cute</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#3b2c1e; touch-action:manipulation; }
+    body {
+      font-family: 'Press Start 2P', monospace;
+      display:flex; justify-content:center; align-items:center;
+      background: radial-gradient(circle at 30% 30%, #5e3e2b, #2d1e12);
+      user-select:none; -webkit-tap-highlight-color:transparent;
+      image-rendering: pixelated;
+    }
+    #game-container {
+      width:100%; max-width:420px; height:100%;
+      display:flex; flex-direction:column;
+      padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom) 12px;
+    }
+    .top-panel {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 4px; color:#fde4c3; font-size:0.7rem;
+      text-shadow: 2px 2px 0 #3b2c1e;
+    }
+    .currency { display:flex; gap:8px; }
+    .currency-item { display:flex; align-items:center; gap:4px; }
+    .score { font-size:1.1rem; color:#ffd966; }
+    .combo-bar {
+      width:100%; height:10px; background:#634b30; border:2px solid #3e2b1c;
+      border-radius:4px; margin:4px 0 8px; overflow:hidden;
+    }
+    .combo-fill {
+      height:100%; width:0%; background: #ffb347;
+      transition: width 0.1s linear;
+    }
+    .combo-label {
+      text-align:center; font-size:0.65rem; color:#ffe3a5;
+      margin-bottom:4px; min-height:1.2rem;
+    }
+    .tap-arena {
+      flex:1; display:flex; justify-content:center; align-items:center;
+      position:relative; margin:8px 0;
+    }
+    .kitty-container {
+      position:relative; cursor:pointer;
+      transition: transform 0.05s ease;
+      filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5));
+    }
+    .kitty-container:active { transform: scale(0.92); }
+    .base-kitty { font-size: 100px; }
+    .hat { position:absolute; top:-32px; left:50%; transform:translateX(-50%); font-size:36px; }
+    .particle {
+      position:absolute; pointer-events:none;
+      font-family: 'Press Start 2P', monospace;
+      font-size:0.7rem; color:#fde4c3;
+      text-shadow: 2px 2px 0 #3b2c1e;
+      will-change: transform, opacity;
+      transform:translate(-50%,-50%);
+      left:50%; top:50%;
+    }
+    .btn-row {
+      display:flex; flex-wrap:wrap; gap:6px; justify-content:center;
+      padding:6px 0 12px;
+    }
+    .btn {
+      background:#d18f47; border:3px solid #3e2b1c; color:#2d1e12;
+      padding:8px 12px; font-family:'Press Start 2P', monospace; font-size:0.55rem;
+      box-shadow: 3px 3px 0 #3e2b1c; cursor:pointer;
+      transition: transform 0.1s, filter 0.2s;
+      display:flex; align-items:center; gap:4px;
+      white-space: nowrap;
+    }
+    .btn:active { transform:translate(2px,2px); box-shadow:1px 1px 0 #3e2b1c; filter:brightness(0.9); }
+    .btn.accent { background:#f4b642; }
+    .modal {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:rgba(0,0,0,0.75); display:flex; justify-content:center;
+      align-items:center; z-index:100;
+      visibility:hidden; opacity:0; transition:0.2s;
+    }
+    .modal.open { visibility:visible; opacity:1; }
+    .modal-content {
+      background:#4a3522; color:#fde4c3; border:4px solid #3e2b1c;
+      border-radius:0; padding:16px; width:88%; max-width:360px;
+      max-height:75vh; overflow-y:auto;
+      font-size:0.55rem; line-height:1.5;
+      box-shadow: 6px 6px 0 #1f140a;
+    }
+    .modal-content h3 {
+      text-align:center; margin-bottom:12px; font-size:0.75rem;
+      text-shadow: 3px 3px 0 #3e2b1c;
+    }
+    .upgrade-row, .ach-row, .quest-row {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 0; border-bottom:2px solid #5e3e2b;
+    }
+    .buy-btn {
+      background:#f4b642; border:2px solid #3e2b1c; color:#2d1e12;
+      padding:4px 10px; font-family:inherit; font-size:0.5rem; cursor:pointer;
+      box-shadow: 2px 2px 0 #3e2b1c;
+    }
+    .buy-btn:active { transform:translate(1px,1px); box-shadow:none; }
+    .buy-btn:disabled { background:#887a6b; cursor:default; }
+    .mini-game-area {
+      height:200px; background:#2d1e12; border:2px solid #5e3e2b;
+      position:relative; overflow:hidden; margin:8px 0;
+    }
+    .falling-star {
+      position:absolute; font-size:1.5rem; cursor:pointer;
+      animation: fall linear forwards;
+    }
+    @keyframes fall { to { transform: translateY(220px); } }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div class="top-panel">
+      <div class="currency">
+        <div class="currency-item">🌰 <span id="seedsDisplay">0</span></div>
+        <div class="currency-item">💎 <span id="crystalsDisplay">0</span></div>
+      </div>
+      <div id="comboLabel" class="combo-label">x1</div>
+    </div>
+    <div class="combo-bar"><div id="comboFill" class="combo-fill"></div></div>
+    <div class="tap-arena" id="tapArena">
+      <div class="kitty-container" id="kittyContainer">
+        <div class="base-kitty" id="baseKitty">🐱</div>
+        <div class="hat" id="hatSlot"></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="shopBtn">🛒 Shop</button>
+      <button class="btn" id="customBtn">🎨 Style</button>
+      <button class="btn" id="questsBtn">📋 Quests</button>
+      <button class="btn" id="achievementsBtn">🏆</button>
+      <button class="btn" id="dailyBtn">🎁</button>
+      <button class="btn accent" id="evolveBtn">⭐ Evolve</button>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div class="modal" id="shopModal">
+    <div class="modal-content">
+      <h3>🛒 Upgrades</h3>
+      <div id="shopList"></div>
+      <button class="btn" id="closeShop" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="customModal">
+    <div class="modal-content">
+      <h3>🎨 Customization</h3>
+      <p>Hats (💎):</p>
+      <div id="hatShop"></div>
+      <p>Backgrounds (💎):</p>
+      <div id="bgShop"></div>
+      <button class="btn" id="closeCustom" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="questsModal">
+    <div class="modal-content">
+      <h3>📋 Daily Quests</h3>
+      <div id="questList"></div>
+      <button class="btn" id="closeQuests" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="achievementsModal">
+    <div class="modal-content">
+      <h3>🏆 Achievements</h3>
+      <div id="achList"></div>
+      <button class="btn" id="closeAchievements" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="dailyModal">
+    <div class="modal-content">
+      <h3>🎁 Daily Gift</h3>
+      <div id="dailyContent"></div>
+      <button class="btn" id="closeDaily" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="evolveModal">
+    <div class="modal-content">
+      <h3>⭐ Evolution</h3>
+      <div id="evolveContent"></div>
+      <button class="btn" id="closeEvolve" style="margin-top:10px; width:100%;">Close</button>
+    </div>
+  </div>
+  <div class="modal" id="miniGameModal">
+    <div class="modal-content">
+      <h3>🌟 Catch the Star!</h3>
+      <div class="mini-game-area" id="miniGameArea"></div>
+      <p>Caught: <span id="miniCaught">0</span>/10</p>
+      <button class="btn" id="closeMiniGame" style="margin-top:10px; width:100%;">Exit</button>
+    </div>
+  </div>
+
+  <script>
+    (()=>{
+      "use strict";
+
+      const tg = window.Telegram?.WebApp;
+      if (tg) { tg.ready(); tg.expand(); }
+
+      // ---- Game State ----
+      let seeds = 0, crystals = 0;
+      let combo = 1, comboTimer = 0, comboTimestamp = 0;
+      const COMBO_TIMEOUT = 2500;
+
+      const upgrades = {
+        autoTapper: { level:0, baseCost:20, costMult:1.7, value:0.3, name:'Auto Paw', desc:'+{val} seeds/s' },
+        tapPower:   { level:0, baseCost:15, costMult:1.6, value:1, name:'Tap Power', desc:'+{val} per tap' },
+        critChance: { level:0, baseCost:80, costMult:2.3, value:0.04, name:'Crit Claw', desc:'+{val}% crit (x3)' },
+        comboBoost: { level:0, baseCost:150, costMult:2.0, value:0.15, name:'Combo Cat', desc:'+{val}x combo' }
+      };
+
+      let evolveStage = 0;
+      const evolveNames = ['🐱 Kitten','⚔️ Cat Warrior','🔮 Cat Mage','🌟 Legendary Cat'];
+      const evolveCost = [0, 500, 3000, 15000];
+      let permMultiplier = 1;
+
+      let currentHat = null, currentBg = null;
+      const hats = [
+        { id:'none', emoji:'', name:'No Hat', cost:0 },
+        { id:'crown', emoji:'👑', name:'Crown', cost:5 },
+        { id:'tophat', emoji:'🎩', name:'Top Hat', cost:3 },
+        { id:'cap', emoji:'🧢', name:'Cap', cost:2 }
+      ];
+      const backgrounds = [
+        { id:'default', color:'radial-gradient(circle at 30% 30%, #5e3e2b, #2d1e12)', name:'Wood', cost:0 },
+        { id:'meadow', color:'radial-gradient(circle at 20% 40%, #7ba05b, #4a6b3a)', name:'Meadow', cost:5 },
+        { id:'sky', color:'radial-gradient(circle at 10% 70%, #a2c8f2, #6382a2)', name:'Sky', cost:7 }
+      ];
+
+      const achievements = [
+        { id:'first50', name:'First Harvest', desc:'50 seeds', goal:50, rewardSeeds:30, rewardCrystals:0 },
+        { id:'combo5', name:'Combo Master', desc:'Combo x5', goal:5, rewardSeeds:80, rewardCrystals:1 },
+        { id:'tap300', name:'Tireless', desc:'300 taps', goal:300, rewardSeeds:100, rewardCrystals:0 },
+        { id:'evolve1', name:'New Form', desc:'1 evolution', goal:1, rewardSeeds:200, rewardCrystals:3 },
+        { id:'crystal10', name:'Crystalized', desc:'10 crystals', goal:10, rewardSeeds:0, rewardCrystals:5 }
+      ];
+      let totalTaps = 0;
+      let unusedAchievements = [...achievements];
+
+      let dailyQuests = [], lastQuestDate = null;
+
+      let goldenMouseActive = false, goldenMouseTimer = 0;
+      const GOLDEN_MOUSE_INTERVAL = 180;
+
+      // ---- DOM ----
+      const seedsDisplay = document.getElementById('seedsDisplay');
+      const crystalsDisplay = document.getElementById('crystalsDisplay');
+      const comboFill = document.getElementById('comboFill');
+      const comboLabel = document.getElementById('comboLabel');
+      const kittyContainer = document.getElementById('kittyContainer');
+      const tapArena = document.getElementById('tapArena');
+      const hatSlot = document.getElementById('hatSlot');
+
+      // Particle pool
+      const PARTICLE_POOL = 25;
+      const particlePool = [];
+      for (let i=0; i<PARTICLE_POOL; i++) {
+        const el = document.createElement('div'); el.className='particle'; el.style.opacity='0';
+        tapArena.appendChild(el);
+        particlePool.push({ el, life:0, vy:0, vx:0 });
+      }
+      let pIndex = 0;
+      function emitParticle(x,y,text,color='#fde4c3') {
+        const p = particlePool[pIndex]; pIndex = (pIndex+1)%PARTICLE_POOL;
+        p.life=0.7; p.el.textContent=text; p.el.style.color=color;
+        p.el.style.left=x+'px'; p.el.style.top=y+'px'; p.el.style.opacity='1';
+        p.el.style.transform='translate(-50%,-50%)';
+        p.vy=-50-Math.random()*40; p.vx=(Math.random()-0.5)*35;
+      }
+
+      // Audio
+      let audioCtx=null;
+      function initAudio(){ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }
+      function beep(freq, len=0.07, type='square') { if(!audioCtx) return; const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=type; o.frequency.value=freq; g.gain.setValueAtTime(0.12, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+len); o.connect(g).connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+len); }
+
+      function updateUI() { seedsDisplay.textContent=Math.floor(seeds); crystalsDisplay.textContent=Math.floor(crystals); }
+
+      // Combo
+      function updateCombo(deltaMs) {
+        if(comboTimer>0){ comboTimer-=deltaMs; comboFill.style.width=Math.min(100,(comboTimer/COMBO_TIMEOUT)*100)+'%'; }
+        else { combo=1; comboFill.style.width='0%'; }
+        comboLabel.textContent=combo>1?`x${combo}`:'';
+      }
+
+      let autoAcc=0;
+      function updateAuto(dt) {
+        if(upgrades.autoTapper.level>0){ const r=upgrades.autoTapper.level*upgrades.autoTapper.value*permMultiplier; autoAcc+=r*dt; if(autoAcc>=1){ const add=Math.floor(autoAcc); seeds+=add; autoAcc-=add; updateUI(); } }
+      }
+
+      function updateParticles(dt) {
+        for(const p of particlePool){ if(p.life<=0) continue; p.life-=dt; if(p.life<=0){ p.el.style.opacity='0'; continue; } p.vy+=120*dt; const y=parseFloat(p.el.style.top||'0')+p.vy*dt, x=parseFloat(p.el.style.left||'0')+p.vx*dt; p.el.style.top=y+'px'; p.el.style.left=x+'px'; p.el.style.opacity=Math.min(1,p.life/0.2); }
+      }
+
+      function handleTap(e) {
+        e.preventDefault(); initAudio();
+        const r=kittyContainer.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+        const tx=e.touches?.[0]?.clientX||e.clientX, ty=e.touches?.[0]?.clientY||e.clientY;
+        let val=1+upgrades.tapPower.level*upgrades.tapPower.value;
+        let crit=false;
+        if(Math.random()<upgrades.critChance.level*upgrades.critChance.value){ val*=3; crit=true; }
+        val*=permMultiplier*(1+upgrades.comboBoost.level*upgrades.comboBoost.value*(combo-1));
+        seeds+=val;
+        const now=Date.now(); now-combotimestamp<COMBO_TIMEOUT?combo++:combo=1; combotimestamp=now; combo=Math.min(combo,30); comboTimer=COMBO_TIMEOUT;
+        const pText=crit?`💥+${Math.floor(val)}`:`+${Math.floor(val)}`;
+        emitParticle(cx+(tx-cx)*0.3-10+Math.random()*20, cy+(ty-cy)*0.3-30, pText, crit?'#ffb347':'#fde4c3');
+        beep(450+combo*12,0.06,crit?'triangle':'square');
+        totalTaps++; updateUI(); checkAchievements(); checkQuestProgress('tap',1); saveGame();
+      }
+      kittyContainer.addEventListener('pointerdown', handleTap);
+      kittyContainer.addEventListener('touchstart', e=>e.preventDefault());
+
+      function spawnGoldenMouse() {
+        if(goldenMouseActive) return; goldenMouseActive=true;
+        const m=document.createElement('div'); m.textContent='🐭✨'; m.style.cssText='position:absolute;font-size:2rem;cursor:pointer;z-index:50;left:10%;top:30%;animation:wiggle 0.5s infinite;';
+        tapArena.appendChild(m);
+        const remove=()=>{ m.remove(); goldenMouseActive=false; goldenMouseTimer=GOLDEN_MOUSE_INTERVAL; };
+        m.addEventListener('pointerdown', e=>{ e.stopPropagation(); const b=2+Math.floor(Math.random()*3); crystals+=b; beep(1200,0.1,'sine'); emitParticle(e.clientX,e.clientY,`💎+${b}`,'#cceeff'); updateUI(); saveGame(); remove(); });
+        setTimeout(remove,5000);
+      }
+
+      function checkAchievements() {
+        for(const a of unusedAchievements){
+          let prog=0;
+          if(a.id==='first50') prog=seeds; else if(a.id==='combo5') prog=combo; else if(a.id==='tap300') prog=totalTaps; else if(a.id==='evolve1') prog=evolveStage>=1?1:0; else if(a.id==='crystal10') prog=crystals;
+          if(prog>=a.goal){ seeds+=a.rewardSeeds; crystals+=a.rewardCrystals; unusedAchievements=unusedAchievements.filter(x=>x.id!==a.id); beep(900,0.15,'sawtooth'); alert(`🏆 ${a.name}!`); updateUI(); saveGame(); }
+        }
+      }
+
+      function generateQuests() {
+        const today=new Date().toDateString();
+        if(lastQuestDate===today && dailyQuests.length) return;
+        lastQuestDate=today;
+        dailyQuests=[ { id:'tap50', desc:'Tap 50 times', goal:50, progress:0, rewardSeeds:40, rewardCrystals:0 }, { id:'combo3', desc:'Reach combo x3', goal:3, progress:0, rewardSeeds:30, rewardCrystals:1 }, { id:'buy1', desc:'Buy 1 upgrade', goal:1, progress:0, rewardSeeds:50, rewardCrystals:0 } ];
+      }
+      function checkQuestProgress(type, amount) {
+        dailyQuests.forEach(q=>{ if(q.progress>=q.goal) return; if(type==='tap'&&q.id==='tap50') q.progress+=amount; if(type==='combo'&&q.id==='combo3'&&combo>=q.goal) q.progress=q.goal; if(type==='buy'&&q.id==='buy1') q.progress+=amount; if(q.progress>=q.goal){ seeds+=q.rewardSeeds; crystals+=q.rewardCrystals; updateUI(); beep(700,0.1,'triangle'); alert(`Quest "${q.desc}" done!`); saveGame(); } });
+      }
+
+      function getCost(upg){ return Math.floor(upg.baseCost*Math.pow(upg.costMult,upg.level)); }
+      function renderShop() {
+        const list=document.getElementById('shopList'); list.innerHTML='';
+        for(const [key,u] of Object.entries(upgrades)){
+          const cost=getCost(u);
+          const row=document.createElement('div'); row.className='upgrade-row';
+          row.innerHTML=`<div><strong>${u.name}</strong> (lvl ${u.level})<br><small>${u.desc.replace('{val}',u.value)}</small></div><button class="buy-btn" data-key="${key}" ${seeds<cost?'disabled':''}>🌰${cost}</button>`;
+          list.appendChild(row);
+        }
+        list.onclick=e=>{ const btn=e.target.closest('.buy-btn'); if(!btn||btn.disabled) return; const key=btn.dataset.key, upg=upgrades[key], cost=getCost(upg); if(seeds>=cost){ seeds-=cost; upg.level++; updateUI(); renderShop(); beep(600,0.08); checkQuestProgress('buy',1); saveGame(); } };
+      }
+
+      function renderCustomShop() {
+        const hdiv=document.getElementById('hatShop'); hdiv.innerHTML=''; hats.forEach(h=>{ const btn=document.createElement('button'); btn.className='buy-btn'; btn.textContent=h.cost>0?`${h.emoji} ${h.name} 💎${h.cost}`:`${h.name} (free)`; btn.disabled=(crystals<h.cost)||(h.id===currentHat); btn.onclick=()=>{ if(crystals>=h.cost){ crystals-=h.cost; currentHat=h.id; hatSlot.textContent=h.emoji||''; updateUI(); renderCustomShop(); saveGame(); beep(550,0.06); } }; hdiv.appendChild(btn); });
+        const bdiv=document.getElementById('bgShop'); bdiv.innerHTML=''; backgrounds.forEach(b=>{ const btn=document.createElement('button'); btn.className='buy-btn'; btn.textContent=b.cost>0?`${b.name} 💎${b.cost}`:`${b.name} (free)`; btn.disabled=(crystals<b.cost)||(b.id===currentBg); btn.onclick=()=>{ if(crystals>=b.cost){ crystals-=b.cost; currentBg=b.id; document.body.style.background=b.color; updateUI(); renderCustomShop(); saveGame(); beep(550,0.06); } }; bdiv.appendChild(btn); });
+      }
+
+      function renderEvolve() {
+        const content=document.getElementById('evolveContent');
+        const next=evolveStage+1;
+        if(next>=evolveCost.length){ content.innerHTML='<p>Maximum evolution! 🐱‍👤</p>'; }
+        else {
+          const need=evolveCost[next];
+          content.innerHTML=`<p>Current: ${evolveNames[evolveStage]}</p><p>Next: ${evolveNames[next]}</p><p>Required 🌰${need}</p>${seeds>=need?'<button class="btn" id="evolveNow">Evolve!</button>':'<p>Not enough seeds</p>'}`;
+          if(seeds>=need){ setTimeout(()=>{ document.getElementById('evolveNow')?.addEventListener('click',()=>{ seeds=0; combo=1; comboTimer=0; Object.values(upgrades).forEach(u=>u.level=0); autoAcc=0; totalTaps=0; evolveStage++; permMultiplier*=1.6; crystals+=2+evolveStage; document.getElementById('baseKitty').textContent=evolveNames[evolveStage].split(' ')[0]; updateUI(); beep(1000,0.2,'triangle'); alert('Evolved! Multiplier x'+permMultiplier.toFixed(1)); closeModal('evolveModal'); saveGame(); checkAchievements(); }); },10); }
+        }
+      }
+
+      function openModal(id){ document.getElementById(id).classList.add('open'); }
+      function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+      function dailyReward() {
+        const today=new Date().toDateString();
+        if(localStorage.getItem('kittyDailyDate')===today){ document.getElementById('dailyContent').innerHTML='<p>Already claimed today ☀️</p>'; }
+        else {
+          const seedsRew=40+evolveStage*10, crystRew=1+Math.floor(evolveStage/2);
+          document.getElementById('dailyContent').innerHTML=`<p>🌰${seedsRew} 💎${crystRew}</p><button class="btn" id="claimDailyBtn">Claim</button>`;
+          setTimeout(()=>{ document.getElementById('claimDailyBtn')?.addEventListener('click',()=>{ seeds+=seedsRew; crystals+=crystRew; localStorage.setItem('kittyDailyDate',today); updateUI(); saveGame(); beep(660,0.12); closeModal('dailyModal'); generateQuests(); }); },10);
+        }
+      }
+
+      function startMiniGame() {
+        const area=document.getElementById('miniGameArea'); area.innerHTML=''; let caught=0; const display=document.getElementById('miniCaught'); display.textContent='0';
+        function spawnStar() {
+          if(caught>=10) return; const star=document.createElement('div'); star.className='falling-star'; star.textContent='⭐'; star.style.left=Math.random()*80+'%'; star.style.animationDuration=(2+Math.random()*2)+'s';
+          star.addEventListener('pointerdown', e=>{ e.stopPropagation(); caught++; display.textContent=caught; star.remove(); beep(800,0.05); if(caught>=10) endGame(); });
+          area.appendChild(star); setTimeout(()=>{ if(star.parentNode) star.remove(); if(caught<10) spawnStar(); },2500);
+        }
+        function endGame(){ const reward=caught*2; seeds+=reward; updateUI(); beep(700,0.15); alert(`You caught ${caught} stars! +${reward}🌰`); closeModal('miniGameModal'); saveGame(); }
+        for(let i=0;i<3;i++) setTimeout(spawnStar,i*400);
+      }
+
+      function saveGame() {
+        const data={ seeds, crystals, combo, comboTimestamp, upgrades:JSON.parse(JSON.stringify(upgrades)), evolveStage, permMultiplier, totalTaps, currentHat, currentBg, unusedAch:unusedAchievements.map(a=>a.id), dailyQuests, lastQuestDate };
+        localStorage.setItem('kittyCatCuteSave', JSON.stringify(data));
+        if(tg?.CloudStorage) tg.CloudStorage.setItem('kittyCatCuteSave', JSON.stringify(data));
+      }
+      function loadGame() {
+        const raw=localStorage.getItem('kittyCatCuteSave'); if(raw){ try{ const d=JSON.parse(raw); seeds=d.seeds||0; crystals=d.crystals||0; combo=d.combo||1; comboTimestamp=d.combotimestamp||0; if(d.upgrades) Object.assign(upgrades,d.upgrades); evolveStage=d.evolveStage||0; permMultiplier=d.permMultiplier||1; totalTaps=d.totalTaps||0; currentHat=d.currentHat||null; currentBg=d.currentBg||null; if(d.unusedAch) unusedAchievements=achievements.filter(a=>!d.unusedAch.includes(a.id)); if(d.dailyQuests){ dailyQuests=d.dailyQuests; lastQuestDate=d.lastQuestDate; } hatSlot.textContent=hats.find(h=>h.id===currentHat)?.emoji||''; const bg=backgrounds.find(b=>b.id===currentBg); if(bg) document.body.style.background=bg.color; document.getElementById('baseKitty').textContent=evolveNames[evolveStage].split(' ')[0]; updateUI(); }catch(e){} }
+        generateQuests();
+      }
+
+      function bindUI() {
+        document.getElementById('shopBtn').addEventListener('click',()=>{ renderShop(); openModal('shopModal'); });
+        document.getElementById('customBtn').addEventListener('click',()=>{ renderCustomShop(); openModal('customModal'); });
+        document.getElementById('questsBtn').addEventListener('click',()=>{ const ql=document.getElementById('questList'); ql.innerHTML=''; dailyQuests.forEach(q=>{ const d=document.createElement('div'); d.className='quest-row'; d.textContent=`${q.desc} [${Math.min(q.progress,q.goal)}/${q.goal}] ${q.progress>=q.goal?'✅':''}`; ql.appendChild(d); }); openModal('questsModal'); });
+        document.getElementById('achievementsBtn').addEventListener('click',()=>{ const al=document.getElementById('achList'); al.innerHTML=''; achievements.forEach(a=>{ const done=!unusedAchievements.some(ua=>ua.id===a.id); const d=document.createElement('div'); d.className='ach-row'; d.innerHTML=`${done?'✅':'🔒'} ${a.name} - ${a.desc} (🌰${a.rewardSeeds} 💎${a.rewardCrystals})`; al.appendChild(d); }); openModal('achievementsModal'); });
+        document.getElementById('dailyBtn').addEventListener('click',()=>{ dailyReward(); openModal('dailyModal'); });
+        document.getElementById('evolveBtn').addEventListener('click',()=>{ renderEvolve(); openModal('evolveModal'); });
+        document.getElementById('closeShop').addEventListener('click',()=>closeModal('shopModal'));
+        document.getElementById('closeCustom').addEventListener('click',()=>closeModal('customModal'));
+        document.getElementById('closeQuests').addEventListener('click',()=>closeModal('questsModal'));
+        document.getElementById('closeAchievements').addEventListener('click',()=>closeModal('achievementsModal'));
+        document.getElementById('closeDaily').addEventListener('click',()=>closeModal('dailyModal'));
+        document.getElementById('closeEvolve').addEventListener('click',()=>closeModal('evolveModal'));
+        document.getElementById('closeMiniGame').addEventListener('click',()=>closeModal('miniGameModal'));
+
+        const miniBtn=document.createElement('button'); miniBtn.className='btn'; miniBtn.textContent='🌟 Mini Game';
+        miniBtn.addEventListener('click',()=>{ openModal('miniGameModal'); startMiniGame(); });
+        document.querySelector('.btn-row').appendChild(miniBtn);
+
+        const shareBtn=document.createElement('button'); shareBtn.className='btn'; shareBtn.textContent='📤 Share';
+        shareBtn.addEventListener('click',()=>{ const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! Join me: https://t.me/your_bot`; if(tg) tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/your_bot&text=${encodeURIComponent(msg)}`); else alert(msg); });
+        document.querySelector('.btn-row').appendChild(shareBtn);
+      }
+
+      let lastTime=performance.now();
+      function loop(now) {
+        const dt=Math.min(0.1,(now-lastTime)/1000); lastTime=now;
+        updateCombo(dt*1000); updateAuto(dt); updateParticles(dt);
+        if(!goldenMouseActive){ goldenMouseTimer-=dt; if(goldenMouseTimer<=0){ spawnGoldenMouse(); goldenMouseTimer=GOLDEN_MOUSE_INTERVAL; } }
+        else goldenMouseTimer=GOLDEN_MOUSE_INTERVAL;
+        requestAnimationFrame(loop);
+      }
+
+      loadGame(); bindUI(); requestAnimationFrame(loop);
+      setInterval(saveGame,5000); window.addEventListener('beforeunload',saveGame);
+    })();
+  </script>
+</body>
+</html>
