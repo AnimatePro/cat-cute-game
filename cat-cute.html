@@ -424,7 +424,7 @@
         document.querySelector('.btn-row').appendChild(miniBtn);
 
         const shareBtn=document.createElement('button'); shareBtn.className='btn'; shareBtn.textContent='📤 Share';
-        shareBtn.addEventListener('click',()=>{ const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! Join me: https://t.me/your_bot`; if(tg) tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/your_bot&text=${encodeURIComponent(msg)}`); else alert(msg); });
+        shareBtn.addEventListener('click',()=>{ const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! Join me: https://t.me/CatCuteMobileBot/CatCute`; if(tg) tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/CatCuteMobileBot/CatCute&text=${encodeURIComponent(msg)}`); else alert(msg); });
         document.querySelector('.btn-row').appendChild(shareBtn);
       }
 
