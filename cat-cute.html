@@ -37,15 +37,9 @@
     }
     .kitty-container{
       position:relative;
-      /* Временно убираем pointer-events, чтобы кот сам не ловил события,
-         но на время анимации будем ставить его обратно через JS */
-      pointer-events: auto;
+      pointer-events:none; /* кот не перехватывает клики */
       filter:drop-shadow(0 6px 8px rgba(0,0,0,0.5));
       animation:kittyIdle 2s ease-in-out infinite;
-    }
-    /* Класс, который навешивается при анимации, чтобы избежать дабл-тапов */
-    .kitty-container.kitty-bounce {
-      pointer-events: none;
     }
     @keyframes kittyIdle{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
     @keyframes kittyBounce{0%{transform:scale(1) translateY(0)}30%{transform:scale(0.85) translateY(-8px)}70%{transform:scale(1.1) translateY(4px)}100%{transform:scale(1) translateY(0)}}
@@ -130,10 +124,7 @@
       position:absolute;top:8px;right:8px;font-size:1.2rem;z-index:10;
       pointer-events:none;
     }
-    /* Облако эмоций тоже не должно ловить клики */
-    #emotionCloud {
-      pointer-events: none;
-    }
+    #emotionCloud{pointer-events:none;}
   </style>
 </head>
 <body>
@@ -165,10 +156,11 @@
       <button class="btn" id="dailyBtn">🎁</button>
       <button class="btn accent" id="evolveBtn">⭐ Evolve</button>
       <button class="btn" id="challengeBtn">⚔️ Challenge</button>
+      <button class="btn" id="settingsBtn">⚙️ Settings</button>
     </div>
   </div>
 
-  <!-- Модальные окна -->
+  <!-- Modals -->
   <div class="modal" id="shopModal"><div class="modal-content"><h3>🛒 Upgrades</h3><div id="shopList"></div><button class="btn close-modal" style="margin-top:10px;width:100%">Close</button></div></div>
   <div class="modal" id="boostModal"><div class="modal-content"><h3>⚡ Boosters</h3><div id="boostList"></div><button class="btn close-modal" style="margin-top:10px;width:100%">Close</button></div></div>
   <div class="modal" id="customModal"><div class="modal-content"><h3>🎨 Customization</h3>
@@ -206,7 +198,11 @@
       "use strict";
 
       const tg = window.Telegram?.WebApp;
-      if(tg){ tg.ready(); tg.expand(); }
+      if(tg){
+        tg.ready();
+        tg.expand();
+        tg.disableVerticalSwipes(); // блокируем вертикальные свайпы, чтобы не мешали тапам
+      }
 
       // ------- Game State -------
       let seeds=0, crystals=0, combo=1, comboTimer=0, comboTimestamp=0;
@@ -392,7 +388,7 @@
         setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),200)},d);
       }
 
-      // Пул частиц
+      // Particles & effects
       const PARTICLE_POOL=40;
       const particlePool=[];
       for(let i=0;i<PARTICLE_POOL;i++){const el=document.createElement('div');el.className='particle';el.style.opacity='0';tapArena.appendChild(el);particlePool.push({el,life:0,vy:0,vx:0});}
@@ -402,7 +398,7 @@
       function spawnPaw(x,y){const el=document.createElement('div');el.style.cssText=`position:absolute;left:${x}px;top:${y}px;font-size:1.2rem;pointer-events:none;opacity:0.8;`;el.textContent='🐾';tapArena.appendChild(el);const sY=y;function anim(){const dy=parseFloat(el.style.top||sY)-2;el.style.top=dy+'px';el.style.opacity=parseFloat(el.style.opacity)-0.02;if(parseFloat(el.style.opacity)>0&&dy>sY-40)requestAnimationFrame(anim);else el.remove();}requestAnimationFrame(anim);}
       function spawnHeart(x,y){const el=document.createElement('div');el.style.cssText=`position:absolute;left:${x}px;top:${y}px;font-size:1.4rem;pointer-events:none;opacity:0.9;`;el.textContent='💖';tapArena.appendChild(el);const sY=y;function anim(){const dy=parseFloat(el.style.top||sY)-1.5;const dx=parseFloat(el.style.left||x)+(Math.random()-0.5)*1;el.style.top=dy+'px';el.style.left=dx+'px';el.style.opacity=parseFloat(el.style.opacity)-0.015;if(parseFloat(el.style.opacity)>0&&dy>sY-50)requestAnimationFrame(anim);else el.remove();}requestAnimationFrame(anim);}
 
-      // Настроение
+      // Mood
       function updateMood(dt){
         mood=Math.max(0,Math.min(maxMood, mood-moodDecay*dt));
         moodIcon.textContent=mood>60?'😺':mood>30?'😿':'😾';
@@ -416,7 +412,7 @@
       }
       function boostMood(amount){mood=Math.min(maxMood,mood+amount);}
 
-      // Сезоны
+      // Seasons
       function updateSeason(){
         const month=new Date().getMonth();
         if(month>=2&&month<=4)currentSeason='spring';
@@ -432,13 +428,13 @@
         }
       }
 
-      // Эмоции
+      // Emotion
       function showEmotion(emoji){
         emotionCloud.textContent=emoji;emotionCloud.style.opacity='1';
         setTimeout(()=>emotionCloud.style.opacity='0',1500);
       }
 
-      // Отображение кота (скин или эволюция)
+      // Kitty appearance
       function updateKittyAppearance(){
         const baseKitty=document.getElementById('baseKitty');
         if(currentSkin!=='default' && skins.find(s=>s.id===currentSkin)){
@@ -448,7 +444,7 @@
         }
       }
 
-      // Питомец
+      // Pet
       function startPet(){
         if(petIntervalId) return;
         petComp.style.display='block';
@@ -460,15 +456,8 @@
           saveGame();
         },30000);
       }
-      function activatePet(){
-        if(petActive) return;
-        petActive=true; petLevel=1;
-        startPet();
-      }
-      function stopPet(){
-        if(petIntervalId){ clearInterval(petIntervalId); petIntervalId=null; }
-        petComp.style.display='none';
-      }
+      function activatePet(){ if(petActive) return; petActive=true; petLevel=1; startPet(); }
+      function stopPet(){ if(petIntervalId){ clearInterval(petIntervalId); petIntervalId=null; } petComp.style.display='none'; }
 
       // UI
       function updateUI(){seedsDisplay.textContent=Math.floor(seeds);crystalsDisplay.textContent=Math.floor(crystals);}
@@ -527,15 +516,17 @@
         });
       }
 
-      // Обработчик тапов (универсальный)
+      // --- TAP HANDLER (исправлен) ---
       function handleTap(e){
+        // Игнорируем, если клик был по кнопкам/модалкам/боссу
         if(e.target.closest('.btn,.modal,.close-modal,#bossRat')) return;
+
+        // Отменяем стандартное поведение, чтобы не было зума/выделения
         e.preventDefault();
+        e.stopPropagation(); // предотвращаем всплытие, чтобы не срабатывало на document
+
         initAudio();
         startMusic();
-
-        // Снимаем блокировку указателя с кота, если она была включена для анимации
-        kittyContainer.style.pointerEvents = 'auto';
 
         const rect=tapArena.getBoundingClientRect();
         const x=e.clientX-rect.left, y=e.clientY-rect.top;
@@ -562,7 +553,6 @@
         if(now-combotimestamp<COMBO_TIMEOUT) combo++; else combo=1;
         comboTimestamp=now; combo=Math.min(combo,30); comboTimer=COMBO_TIMEOUT;
 
-        // Визуальные эффекты
         emitParticle(x,y-15,crit?`💥+${Math.floor(val)}`:`+${Math.floor(val)}`,crit?'#ffb347':'#fde4c3');
         spawnRipple(x,y);
         if(Math.random()<0.4) spawnPaw(x+Math.random()*20-10,y-15-Math.random()*10);
@@ -570,8 +560,9 @@
 
         if(hitKitty){
           kittyContainer.classList.add('kitty-bounce');
+          setTimeout(()=>kittyContainer.classList.remove('kitty-bounce'),300);
           showEmotion('😸');
-        } else {
+        }else{
           showEmotion('😊');
         }
 
@@ -579,7 +570,7 @@
           gameContainer.style.transform='translate(2px,-2px)';
           setTimeout(()=>gameContainer.style.transform='',60);
           playBling();
-        } else {
+        }else{
           playMeow(0.8+combo*0.02);
         }
         playSeedShake();
@@ -591,37 +582,21 @@
         checkQuestProgress('tap',1);
         checkCardDrop();
         saveGame();
-
-        // Убираем класс анимации и восстанавливаем pointer-events кота (он был изменён только на время анимации)
-        setTimeout(() => {
-          kittyContainer.classList.remove('kitty-bounce');
-        }, 300);
       }
 
-      // Вешаем обработчики для всех типов указателей
+      // Навешиваем обработчик ТОЛЬКО на арену
       tapArena.addEventListener('pointerdown', handleTap);
-      tapArena.addEventListener('mousedown', handleTap);   // явно для ПК
-      // Предотвращаем зум на мобильных
       tapArena.addEventListener('touchstart', (e) => {
         if (!e.target.closest('.btn,.modal,.close-modal')) e.preventDefault();
       }, {passive: false});
 
+      // --- Остальные функции ---
       function checkCardDrop(){
         if(Math.random()<0.01){
           const nc=allCards[Math.floor(Math.random()*allCards.length)];
           if(!collectedCards.includes(nc)){collectedCards.push(nc);showToast(`🃏 New card: ${nc}!`);saveGame();}
         }
       }
-
-      // ... оставшаяся часть без изменений ...
-      // (функции checkAchievements, generateQuests, checkQuestProgress, getCost, renderShop, renderBoostShop,
-      //  renderCustomShop, renderEvolve, dailyReward, startMiniGame, renderCollection, startChallenge, openModal,
-      //  closeModal, saveGame, loadGame, bindUI, loop)
-
-      // Ниже вставляем все остальные функции, которые были выше (для краткости я их здесь опущу,
-      // но в реальном файле они должны быть полностью). В ответе я предоставлю полный код.
-
-      // Я добавлю их сейчас.
       function checkAchievements(){
         achievementsList.forEach(a=>{
           if(unlockedAchievements.includes(a.id))return;
@@ -785,6 +760,8 @@
         volumeRange.value=globalVolume*100; volumeValue.textContent=Math.round(globalVolume*100);
         setVolume(globalVolume);
       }
+
+      // Bind UI
       function bindUI(){
         document.querySelectorAll('.close-modal').forEach(b=>b.addEventListener('click',function(){const m=this.closest('.modal');if(m)closeModal(m.id);}));
         document.getElementById('shopBtn').addEventListener('click',()=>{renderShop();openModal('shopModal');});
@@ -795,7 +772,7 @@
         document.getElementById('dailyBtn').addEventListener('click',()=>{dailyReward();openModal('dailyModal');});
         document.getElementById('evolveBtn').addEventListener('click',()=>{renderEvolve();openModal('evolveModal');});
         document.getElementById('challengeBtn').addEventListener('click',startChallenge);
-        const settingsBtn=document.createElement('button');settingsBtn.className='btn';settingsBtn.textContent='⚙️ Settings';settingsBtn.addEventListener('click',()=>openModal('settingsModal'));document.querySelector('.btn-row').appendChild(settingsBtn);
+        document.getElementById('settingsBtn').addEventListener('click',()=>openModal('settingsModal'));
         volumeRange.addEventListener('input',()=>{const v=parseInt(volumeRange.value)/100;volumeValue.textContent=Math.round(v*100);setVolume(v);saveGame();});
         const shareBtn=document.createElement('button');shareBtn.className='btn';shareBtn.textContent='📤 Share';shareBtn.addEventListener('click',()=>{const msg=`🐱 I collected ${Math.floor(seeds)} seeds in Cat Cute! https://t.me/CatCuteMobileBot/CatCute`;if(tg)tg.openTelegramLink(`https://t.me/share/url?url=https://t.me/CatCuteMobileBot/CatCute&text=${encodeURIComponent(msg)}`);else navigator.clipboard?.writeText(msg).then(()=>showToast('Link copied!'));});document.querySelector('.btn-row').appendChild(shareBtn);
         const miniBtn=document.createElement('button');miniBtn.className='btn';miniBtn.textContent='🌟 Mini Game';miniBtn.addEventListener('click',()=>{openModal('miniGameModal');startMiniGame();});document.querySelector('.btn-row').appendChild(miniBtn);
