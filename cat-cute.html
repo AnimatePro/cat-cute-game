@@ -330,13 +330,13 @@
       function emitParticle(x,y,text,color='#fde4c3'){const p=particlePool[pIndex];pIndex=(pIndex+1)%PARTICLE_POOL;p.life=0.7;p.el.textContent=text;p.el.style.color=color;p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity='1';p.el.style.transform='translate(-50%,-50%)';p.vy=-50-Math.random()*40;p.vx=(Math.random()-0.5)*35;}
       function spawnRipple(x,y){const r=document.createElement('div');r.className='ripple';r.style.left=x+'px';r.style.top=y+'px';tapArena.appendChild(r);r.addEventListener('animationend',()=>r.remove());}
 
-      // Mood
+      // Mood — без всплывающего уведомления
       function updateMood(dt){
         mood=Math.max(0,Math.min(maxMood, mood-moodDecay*dt));
         moodIcon.textContent=mood>60?'😺':mood>30?'😿':'😾';
         if(mood>=80 && activeBoost.fastAuto<10) {
           activeBoost.fastAuto=Math.max(activeBoost.fastAuto,10);
-          showToast('Ultra Purr! Boost active!');
+          // Больше не выводим тост
         }
       }
       function boostMood(amount){mood=Math.min(maxMood,mood+amount);}
@@ -413,13 +413,10 @@
         });
       }
 
-      // --- ГЛОБАЛЬНЫЙ ОБРАБОТЧИК ТАПОВ (исправлен) ---
+      // --- ГЛОБАЛЬНЫЙ ОБРАБОТЧИК ТАПОВ ---
       function globalTapHandler(e) {
-        // Если открыто модальное окно – не обрабатываем тапы для игры
         if (document.querySelector('.modal.open')) return;
-        // Если клик пришёлся по кнопке, боссу или другому интерактивному элементу – не обрабатываем
         if (e.target.closest('.btn, .modal, .close-modal, #bossRat')) return;
-        // Проверяем, что клик был внутри области tapArena
         const rect = tapArena.getBoundingClientRect();
         if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
 
@@ -453,7 +450,6 @@
         if (now - comboTimestamp < COMBO_TIMEOUT) combo++; else combo = 1;
         comboTimestamp = now; combo = Math.min(combo, 30); comboTimer = COMBO_TIMEOUT;
 
-        // Упрощённые эффекты: только частицы и круг
         emitParticle(x, y - 15, crit ? `💥+${Math.floor(val)}` : `+${Math.floor(val)}`, crit ? '#ffb347' : '#fde4c3');
         spawnRipple(x, y);
 
@@ -483,30 +479,9 @@
       }
 
       document.addEventListener('pointerdown', globalTapHandler);
-      document.addEventListener('mousedown', globalTapHandler);   // запасной вариант для ПК
+      document.addEventListener('mousedown', globalTapHandler);
 
-      // Остальные функции без изменений...
-      function checkCardDrop() { /* ... */ }
-      function checkAchievements() { /* ... */ }
-      function generateQuests() { /* ... */ }
-      function checkQuestProgress(type, amount) { /* ... */ }
-      function getCost(upg){return Math.floor(upg.baseCost*Math.pow(upg.costMult,upg.level));}
-      function renderShop() { /* ... */ }
-      function renderBoostShop() { /* ... */ }
-      function renderCustomShop() { /* ... */ }
-      function renderEvolve() { /* ... */ }
-      function dailyReward() { /* ... */ }
-      function startMiniGame() { /* ... */ }
-      function renderCollection() { /* ... */ }
-      function startChallenge() { /* ... */ }
-      function openModal(id){document.getElementById(id).classList.add('open');}
-      function closeModal(id) { /* ... */ }
-      function saveGame() { /* ... */ }
-      function loadGame() { /* ... */ }
-      function bindUI() { /* ... */ }
-
-      // Для краткости я не стал дублировать все функции, они идентичны предыдущей версии, но с глобальным обработчиком.
-      // Вставляю их сейчас в полном объёме.
+      // Остальные функции без изменений
       function checkCardDrop(){
         if(Math.random()<0.01){const nc=allCards[Math.floor(Math.random()*allCards.length)];if(!collectedCards.includes(nc)){collectedCards.push(nc);showToast(`🃏 New card: ${nc}!`);saveGame();}}
       }
